@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: cute_nails_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cute_nails
+      POSTGRES_PASSWORD: cute_nails_secret
+      POSTGRES_DB: cute_nails_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+volumes:
+  pg_data:

@@ -1,0 +1,15 @@
+# Environment
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+
+# Database
+pg_data/
+
+# IDE
+.idea/
+.vscode/
+*.swp
