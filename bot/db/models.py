@@ -67,7 +67,7 @@ class Booking(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    slot_id: Mapped[int] = mapped_column(ForeignKey("slots.id"), unique=True, nullable=False)
+    slot_id: Mapped[int] = mapped_column(ForeignKey("slots.id"), nullable=False)
 
     status: Mapped[BookingStatus] = mapped_column(
         Enum(BookingStatus, name="booking_status"),
