@@ -114,3 +114,18 @@ def phone_request_kb() -> ReplyKeyboardMarkup:
 
 # Для удаления reply-клавиатуры после получения контакта
 remove_kb = ReplyKeyboardRemove()
+
+
+def active_booking_kb(admin_username: str | None) -> InlineKeyboardMarkup | None:
+    """Клавиатура с кнопкой связи с админом для отмены записи."""
+    if not admin_username:
+        return None
+    
+    # Убираем @ если он есть, чтобы сформировать ссылку t.me
+    clean_username = admin_username.lstrip('@')
+    
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отменить запись (связь с админом)", url=f"https://t.me/{clean_username}")]
+        ]
+    )

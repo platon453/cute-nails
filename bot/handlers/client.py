@@ -7,6 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from bot.config import settings
 from bot.db.models import Booking, BookingStatus, Slot, User
@@ -14,6 +15,7 @@ from bot.keyboards.client import (
     BookDateCB,
     BookTimeCB,
     BookingActionCB,
+    active_booking_kb,
     available_dates_kb,
     available_times_kb,
     phone_request_kb,
@@ -33,9 +35,44 @@ async def cmd_start(
     state: FSMContext,
     session: AsyncSession,
 ) -> None:
-    """Приветствие клиента и показ доступных дат."""
+    """Приветствие клиента и показ доступных дат (или текущей записи)."""
     await state.clear()
 
+    # Сначала проверяем, есть ли у пользователя активная бронь
+    tg_id = message.from_user.id
+    
+    # Ищем пользователя и его активные записи на будущие слоты
+    result = await session.execute(
+        select(Booking)
+        .options(selectinload(Booking.slot))
+        .join(Booking.user)
+        .join(Booking.slot)
+        .where(
+            User.telegram_id == tg_id,
+            Booking.status.in_([BookingStatus.PENDING, BookingStatus.CONFIRMED]),
+            Slot.date >= datetime.date.today()
+        )
+        .order_by(Slot.date, Slot.time)
+    )
+    active_booking = result.scalars().first()
+    
+    if active_booking:
+        slot = active_booking.slot
+        date_str = slot.date.strftime("%d.%m.%Y")
+        time_str = slot.time.strftime("%H:%M")
+        status_ru = "Ожидает подтверждения ⏳" if active_booking.status == BookingStatus.PENDING else "Подтверждена ✅"
+        
+        await message.answer(
+            "💅 <b>Привет!</b> У вас уже есть активная запись:\n\n"
+            f"📅 Дата: <b>{date_str}</b>\n"
+            f"⏰ Время: <b>{time_str}</b>\n"
+            f"ℹ️ Статус: {status_ru}\n\n"
+            "Пока эта запись активна, вы не можете записаться на новое время.",
+            reply_markup=active_booking_kb(settings.admin_username)
+        )
+        return
+
+    # Если активных записей нет, показываем доступные слоты
     result = await session.execute(
         select(Slot)
         .where(Slot.is_available == True, Slot.date >= datetime.date.today())
