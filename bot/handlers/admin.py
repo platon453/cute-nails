@@ -335,7 +335,7 @@ async def cb_admin_slot_detail(
 
     result = await session.execute(
         select(Slot)
-        .options(selectinload(Slot.booking).selectinload(Booking.user))
+        .options(selectinload(Slot.bookings).selectinload(Booking.user))
         .where(Slot.id == callback_data.slot_id)
     )
     slot = result.scalar_one_or_none()
@@ -358,9 +358,12 @@ async def cb_admin_slot_detail(
     else:
         text_lines.append("🔴 <b>Статус:</b> Занят")
         
-        # Берем привязанную бронь
-        active_booking = slot.booking
-        if active_booking and active_booking.status in (BookingStatus.CONFIRMED, BookingStatus.PENDING):
+        # Берем привязанную бронь (только активную)
+        active_booking = next(
+            (b for b in slot.bookings if b.status in (BookingStatus.CONFIRMED, BookingStatus.PENDING)),
+            None
+        )
+        if active_booking:
             client = active_booking.user
             status_ru = "Ожидает подтверждения" if active_booking.status == BookingStatus.PENDING else "Подтверждена"
             text_lines.extend([
@@ -397,7 +400,7 @@ async def cb_delete_slot(
 
     result = await session.execute(
         select(Slot)
-        .options(selectinload(Slot.booking))
+        .options(selectinload(Slot.bookings))
         .where(Slot.id == callback_data.slot_id)
     )
     slot = result.scalar_one_or_none()
@@ -454,7 +457,7 @@ async def cb_admin_cancel_booking(
 
     result = await session.execute(
         select(Slot)
-        .options(selectinload(Slot.booking).selectinload(Booking.user))
+        .options(selectinload(Slot.bookings).selectinload(Booking.user))
         .where(Slot.id == callback_data.slot_id)
     )
     slot = result.scalar_one_or_none()
@@ -463,8 +466,11 @@ async def cb_admin_cancel_booking(
         await callback.answer("Слот уже свободен или не найден", show_alert=True)
         return
 
-    active_booking = slot.booking
-    if not active_booking or active_booking.status not in (BookingStatus.CONFIRMED, BookingStatus.PENDING):
+    active_booking = next(
+        (b for b in slot.bookings if b.status in (BookingStatus.CONFIRMED, BookingStatus.PENDING)),
+        None
+    )
+    if not active_booking:
         await callback.answer("Активная бронь не найдена", show_alert=True)
         return
 

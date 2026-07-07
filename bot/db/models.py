@@ -40,8 +40,8 @@ class Slot(Base):
     time: Mapped["Time"] = mapped_column(Time, nullable=False)
     is_available: Mapped[bool] = mapped_column(default=True)
 
-    # Связь: один слот — одна запись (или ни одной). При удалении слота удаляем и бронь (например, отмененную)
-    booking: Mapped["Booking | None"] = relationship(
+    # Связь: один слот — несколько записей (включая отмененные). При удалении слота удаляем и брони
+    bookings: Mapped[list["Booking"]] = relationship(
         back_populates="slot",
         cascade="all, delete-orphan"
     )
@@ -76,7 +76,7 @@ class Booking(Base):
 
     # Обратные связи
     user: Mapped["User"] = relationship(back_populates="bookings")
-    slot: Mapped["Slot"] = relationship(back_populates="booking")
+    slot: Mapped["Slot"] = relationship(back_populates="bookings")
 
     def __repr__(self) -> str:
         return f"<Booking id={self.id} user={self.user_id} slot={self.slot_id} status={self.status}>"
