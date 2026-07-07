@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     db_user: str = "cute_nails"
     db_pass: str = "cute_nails_secret"
     db_name: str = "cute_nails_db"
+    
+    proxy: str | None = None  # Например: "http://127.0.0.1:10808"
 
     @property
     def admin_id_list(self) -> list[int]:

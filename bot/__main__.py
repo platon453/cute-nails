@@ -3,6 +3,7 @@ import logging
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 
 from bot.config import settings
@@ -20,8 +21,14 @@ async def main() -> None:
         format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
     )
 
+    session = None
+    if settings.proxy:
+        session = AiohttpSession(proxy=settings.proxy)
+        logging.info(f"Используем прокси: {settings.proxy}")
+
     bot = Bot(
         token=settings.bot_token,
+        session=session,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
 
