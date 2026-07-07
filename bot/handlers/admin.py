@@ -5,7 +5,7 @@ from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -589,9 +589,9 @@ async def cb_confirm_booking(
             chat_id=booking.user.telegram_id,
             text=(
                 "🎉 <b>Ваша запись подтверждена!</b>\n\n"
-                f"📅 Дата: {date_str}\n"
-                f"⏰ Время: {time_str}\n\n"
-                "Ждём вас! 💅✨"
+                f"• Дата: {date_str}\n"
+                f"• Время: {time_str}\n\n"
+                "Ждём вас! ✨"
             ),
         )
     except Exception as e:
@@ -821,3 +821,6 @@ async def _render_archive(callback: CallbackQuery, session: AsyncSession, page: 
         )
     except TelegramBadRequest:
         pass
+
+
+

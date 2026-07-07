@@ -6,3 +6,4 @@ class AddSlotStates(StatesGroup):
 
     waiting_for_date = State()  # Ожидание ввода даты (ДД.ММ.ГГГГ)
     waiting_for_time = State()  # Ожидание ввода времени (ЧЧ:ММ)
+
