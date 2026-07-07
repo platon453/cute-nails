@@ -21,13 +21,9 @@ class AdminMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
-        # Определяем user_id в зависимости от типа события
-        user_id: int | None = None
-
-        if isinstance(event, Message) and event.from_user:
-            user_id = event.from_user.id
-        elif isinstance(event, CallbackQuery) and event.from_user:
-            user_id = event.from_user.id
+        # Aiogram 3 автоматически добавляет event_from_user в словарь data
+        user = data.get("event_from_user")
+        user_id = user.id if user else None
 
         data["is_admin"] = user_id in settings.admin_id_list if user_id else False
 

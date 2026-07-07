@@ -38,7 +38,6 @@ def _check_admin(is_admin: bool) -> bool:
 async def cmd_admin(message: Message, is_admin: bool) -> None:
     """Команда /admin — открывает админ-панель."""
     if not _check_admin(is_admin):
-        await message.answer("⛔ У вас нет доступа к админ-панели.")
         return
 
     await message.answer(

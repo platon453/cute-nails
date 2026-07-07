@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     @property
     def admin_id_list(self) -> list[int]:
         """Список ID админов, парсится из строки с запятыми."""
-        return [int(x.strip()) for x in self.admin_ids.split(",") if x.strip()]
+        return [int(x.strip().strip('"').strip("'")) for x in self.admin_ids.split(",") if x.strip()]
 
     @property
     def db_url(self) -> str:
