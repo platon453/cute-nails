@@ -723,11 +723,10 @@ async def _render_active_bookings(callback: CallbackQuery, session: AsyncSession
     date_str = booking.slot.date.strftime("%d.%m.%Y")
     time_str = booking.slot.time.strftime("%H:%M")
     
-    user_info = booking.user.first_name
     if booking.user.username:
-        user_info += f" (@{booking.user.username})"
+        user_info = f"@{booking.user.username}"
     else:
-        user_info += f" (<a href='tg://user?id={booking.user.telegram_id}'>Без юзернейма</a>)"
+        user_info = f"<a href='tg://user?id={booking.user.telegram_id}'>{booking.user.first_name}</a>"
         
     phone = booking.user.phone or "Не указан"
     
@@ -803,11 +802,10 @@ async def _render_archive(callback: CallbackQuery, session: AsyncSession, page: 
         date_str = b.slot.date.strftime("%d.%m.%Y %H:%M")
         status_icon = "✅ Одобрено" if b.status == BookingStatus.CONFIRMED else "❌ Отклонено"
         
-        user_name = b.user.first_name
         if b.user.username:
              user_name = f"@{b.user.username}"
         else:
-             user_name = f"<a href='tg://user?id={b.user.telegram_id}'>Без юзернейма</a>"
+             user_name = f"<a href='tg://user?id={b.user.telegram_id}'>{b.user.first_name}</a>"
              
         phone = b.user.phone or "Не указан"
         
