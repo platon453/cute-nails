@@ -2,6 +2,7 @@ import datetime
 import logging
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -242,12 +243,15 @@ async def cb_view_slots(
         await callback.answer()
         return
 
-    await callback.message.edit_text(
-        "📋 <b>Ваши слоты</b>\n\n"
-        "🟢 — свободен  🔴 — занят\n"
-        "Нажмите 🗑 чтобы удалить:",
-        reply_markup=slots_list_kb(slots, page=0),
-    )
+    try:
+        await callback.message.edit_text(
+            "📋 <b>Ваши слоты</b>\n\n"
+            "🟢 — свободен  🔴 — занят\n"
+            "Нажмите 🗑 чтобы удалить:",
+            reply_markup=slots_list_kb(slots, page=0),
+        )
+    except TelegramBadRequest:
+        pass
     await callback.answer()
 
 
@@ -272,9 +276,12 @@ async def cb_slot_page(
     )
     slots = list(result.scalars().all())
 
-    await callback.message.edit_reply_markup(
-        reply_markup=slots_list_kb(slots, page=callback_data.page),
-    )
+    try:
+        await callback.message.edit_reply_markup(
+            reply_markup=slots_list_kb(slots, page=callback_data.page),
+        )
+    except TelegramBadRequest:
+        pass
     await callback.answer()
 
 
