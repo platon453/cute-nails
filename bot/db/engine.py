@@ -6,6 +6,9 @@ from bot.config import settings
 engine = create_async_engine(
     url=settings.db_url,
     echo=False,
+    pool_size=5,
+    max_overflow=10,
+    pool_recycle=3600,
 )
 
 # Фабрика асинхронных сессий

@@ -799,7 +799,7 @@ async def _render_archive(callback: CallbackQuery, session: AsyncSession, page: 
     lines = [f"🗄 <b>Архив заявок (Стр. {page + 1} из {total_pages})</b>\n"]
     
     for b in page_bookings:
-        date_str = b.slot.date.strftime("%d.%m.%Y %H:%M")
+        date_str = f"{b.slot.date.strftime('%d.%m.%Y')} {b.slot.time.strftime('%H:%M')}"
         status_icon = "✅ Одобрено" if b.status == BookingStatus.CONFIRMED else "❌ Отклонено"
         
         if b.user.username:

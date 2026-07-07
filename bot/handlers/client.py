@@ -215,7 +215,7 @@ async def fsm_enter_name(
         await message.answer("❌ Имя слишком короткое. Введите ваше имя:")
         return
 
-    if len(name) > 150:
+    if len(name) > 64:
         await message.answer("❌ Имя слишком длинное. Введите ваше имя:")
         return
 

@@ -10,10 +10,9 @@ class Settings(BaseSettings):
     db_host: str = "localhost"
     db_port: int = 5432
     db_user: str = "cute_nails"
-    db_pass: str = "cute_nails_secret"
+    db_pass: str  # Обязательно задать в .env — дефолт убран намеренно
     db_name: str = "cute_nails_db"
     
-    proxy: str | None = None  # Например: "http://127.0.0.1:10808"
     admin_username: str | None = None  # Например: "@zhechka"
 
     @property

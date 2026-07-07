@@ -4,13 +4,37 @@ services:
     container_name: cute_nails_db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: cute_nails
-      POSTGRES_PASSWORD: cute_nails_secret
-      POSTGRES_DB: cute_nails_db
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${DB_USER:-cute_nails}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: ${DB_NAME:-cute_nails_db}
     volumes:
       - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-cute_nails} -d ${DB_NAME:-cute_nails_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  v2raya:
+    image: mzz2017/v2raya:latest
+    container_name: cute_nails_v2raya
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:2017:2017" # Панель закрыта от интернета, доступ только через SSH-туннель локально
+    volumes:
+      - ./v2raya_data:/etc/v2raya
+
+  bot:
+    build: .
+    container_name: cute_nails_bot
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      v2raya:
+        condition: service_started
+    env_file:
+      - .env
 
 volumes:
   pg_data:

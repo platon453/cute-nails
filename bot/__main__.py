@@ -7,6 +7,7 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 
 from bot.config import settings
+from bot.db.engine import engine
 from bot.handlers.admin import router as admin_router
 from bot.handlers.client import router as client_router
 from bot.middlewares.admin import AdminMiddleware
@@ -19,12 +20,14 @@ async def main() -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler("bot.log", encoding="utf-8"),
+        ],
     )
 
-    session = None
-    if settings.proxy:
-        session = AiohttpSession(proxy=settings.proxy)
-        logging.info(f"Используем прокси: {settings.proxy}")
+    # Прокси через v2rayA (HTTP-прокси на порту 20171 в Docker-сети)
+    session = AiohttpSession(proxy="http://v2raya:20171")
 
     bot = Bot(
         token=settings.bot_token,
@@ -43,6 +46,18 @@ async def main() -> None:
     # Порядок важен: админ первым, чтобы его хендлеры имели приоритет
     dp.include_router(admin_router)
     dp.include_router(client_router)
+
+    # ── Хуки жизненного цикла ───────────────────────────────────────────
+    async def on_startup(bot: Bot) -> None:
+        logging.info("Бот запущен и готов к работе")
+
+    async def on_shutdown(bot: Bot) -> None:
+        logging.info("Бот останавливается — закрываем соединения с БД...")
+        await engine.dispose()
+        logging.info("Бот остановлен")
+
+    dp.startup.register(on_startup)
+    dp.shutdown.register(on_shutdown)
 
     logging.info("Бот запускается...")
     await dp.start_polling(bot)

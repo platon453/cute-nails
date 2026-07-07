@@ -1,0 +1,16 @@
+venv/
+__pycache__/
+*.py[cod]
+.git/
+.gitignore
+.gitattributes
+.env
+.env.example
+pg_data/
+MD/
+*.md
+*.png
+*.log
+.idea/
+.vscode/
+LICENSE
