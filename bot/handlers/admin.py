@@ -14,11 +14,16 @@ from bot.db.models import Booking, BookingStatus, Slot, User
 from bot.keyboards.client import BookingActionCB
 from bot.keyboards.admin import (
     AdminMenuCB,
+    AdminDatesPageCB,
+    AdminDateSelectCB,
+    AdminSlotDetailCB,
+    AdminCancelBookingCB,
     SlotDeleteCB,
-    SlotPageCB,
     admin_main_menu,
+    admin_dates_kb,
+    admin_slots_on_date_kb,
+    admin_slot_detail_kb,
     cancel_kb,
-    slots_list_kb,
 )
 from bot.states.admin import AddSlotStates
 
@@ -213,7 +218,35 @@ async def fsm_slot_time(
     )
 
 
-# ── Просмотр слотов ────────────────────────────────────────────────────
+# ── Просмотр слотов (группировка по датам) ──────────────────────────────
+
+async def _show_dates_page(callback: CallbackQuery, session: AsyncSession, page: int = 0):
+    """Вспомогательная функция для отображения списка дат."""
+    # Получаем уникальные даты, начиная с сегодня
+    result = await session.execute(
+        select(Slot.date)
+        .where(Slot.date >= datetime.date.today())
+        .distinct()
+        .order_by(Slot.date)
+    )
+    dates = list(result.scalars().all())
+
+    if not dates:
+        text = (
+            "📋 <b>Мои слоты</b>\n\n"
+            "Пока нет доступных дат со слотами.\n"
+            "Добавьте их через меню 📅"
+        )
+        markup = admin_main_menu()
+    else:
+        text = "📋 <b>Выберите дату для просмотра слотов:</b>"
+        markup = admin_dates_kb(dates, page=page)
+
+    try:
+        await callback.message.edit_text(text, reply_markup=markup)
+    except TelegramBadRequest:
+        pass
+
 
 @router.callback_query(AdminMenuCB.filter(F.action == "view_slots"))
 async def cb_view_slots(
@@ -221,64 +254,128 @@ async def cb_view_slots(
     session: AsyncSession,
     is_admin: bool,
 ) -> None:
-    """Показать список всех предстоящих слотов."""
+    """Показать список дат со слотами (первая страница)."""
     if not _check_admin(is_admin):
         await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+    await _show_dates_page(callback, session, page=0)
+    await callback.answer()
+
+
+@router.callback_query(AdminDatesPageCB.filter())
+async def cb_admin_dates_page(
+    callback: CallbackQuery,
+    callback_data: AdminDatesPageCB,
+    session: AsyncSession,
+    is_admin: bool,
+) -> None:
+    """Пагинация списка дат."""
+    if not _check_admin(is_admin):
+        return
+    await _show_dates_page(callback, session, page=callback_data.page)
+    await callback.answer()
+
+
+# ── Просмотр слотов на конкретную дату ─────────────────────────────────
+
+@router.callback_query(AdminDateSelectCB.filter())
+async def cb_admin_date_select(
+    callback: CallbackQuery,
+    callback_data: AdminDateSelectCB,
+    session: AsyncSession,
+    is_admin: bool,
+) -> None:
+    """Показать слоты на выбранную дату."""
+    if not _check_admin(is_admin):
+        return
+
+    try:
+        selected_date = datetime.date.fromisoformat(callback_data.date_str)
+    except ValueError:
+        await callback.answer("Ошибка формата даты", show_alert=True)
         return
 
     result = await session.execute(
         select(Slot)
-        .where(Slot.date >= datetime.date.today())
-        .order_by(Slot.date, Slot.time)
+        .where(Slot.date == selected_date)
+        .order_by(Slot.time)
     )
     slots = list(result.scalars().all())
 
     if not slots:
-        await callback.message.edit_text(
-            "📋 <b>Слоты</b>\n\n"
-            "Пока нет доступных слотов.\n"
-            "Добавьте их через меню 📅",
-            reply_markup=admin_main_menu(),
-        )
-        await callback.answer()
+        await callback.answer("Слоты на эту дату не найдены", show_alert=True)
+        await _show_dates_page(callback, session, page=0)
         return
 
+    date_str_ru = selected_date.strftime("%d.%m.%Y")
+    
     try:
         await callback.message.edit_text(
-            "📋 <b>Ваши слоты</b>\n\n"
-            "🟢 — свободен  🔴 — занят\n"
-            "Нажмите 🗑 чтобы удалить:",
-            reply_markup=slots_list_kb(slots, page=0),
+            f"📅 <b>Слоты на {date_str_ru}</b>\n\n"
+            f"Выберите слот для управления:",
+            reply_markup=admin_slots_on_date_kb(slots),
         )
     except TelegramBadRequest:
         pass
     await callback.answer()
 
 
-# ── Пагинация слотов ───────────────────────────────────────────────────
+# ── Карточка конкретного слота ──────────────────────────────────────────
 
-@router.callback_query(SlotPageCB.filter())
-async def cb_slot_page(
+@router.callback_query(AdminSlotDetailCB.filter())
+async def cb_admin_slot_detail(
     callback: CallbackQuery,
-    callback_data: SlotPageCB,
+    callback_data: AdminSlotDetailCB,
     session: AsyncSession,
     is_admin: bool,
 ) -> None:
-    """Переключение страниц списка слотов."""
+    """Показать карточку конкретного слота."""
     if not _check_admin(is_admin):
-        await callback.answer("⛔ Нет доступа", show_alert=True)
         return
 
     result = await session.execute(
         select(Slot)
-        .where(Slot.date >= datetime.date.today())
-        .order_by(Slot.date, Slot.time)
+        .options(selectinload(Slot.booking).selectinload(Booking.user))
+        .where(Slot.id == callback_data.slot_id)
     )
-    slots = list(result.scalars().all())
+    slot = result.scalar_one_or_none()
+
+    if not slot:
+        await callback.answer("Слот не найден", show_alert=True)
+        return
+
+    date_str = slot.date.strftime("%d.%m.%Y")
+    time_str = slot.time.strftime("%H:%M")
+
+    text_lines = [
+        f"💅 <b>Слот:</b> {date_str} в {time_str}",
+        ""
+    ]
+
+    if slot.is_available:
+        text_lines.append("🟢 <b>Статус:</b> Свободен")
+        text_lines.append("<i>Вы можете удалить этот слот, если он больше не нужен.</i>")
+    else:
+        text_lines.append("🔴 <b>Статус:</b> Занят")
+        
+        # Берем привязанную бронь
+        active_booking = slot.booking
+        if active_booking and active_booking.status in (BookingStatus.CONFIRMED, BookingStatus.PENDING):
+            client = active_booking.user
+            status_ru = "Ожидает подтверждения" if active_booking.status == BookingStatus.PENDING else "Подтверждена"
+            text_lines.extend([
+                "",
+                f"👤 <b>Клиент:</b> {client.first_name}",
+                f"📱 <b>Телефон:</b> {client.phone or 'Не указан'}",
+                f"ℹ️ <b>Статус брони:</b> {status_ru}"
+            ])
+        else:
+            text_lines.append("\n⚠️ Бронь не найдена (возможно, ошибка данных).")
 
     try:
-        await callback.message.edit_reply_markup(
-            reply_markup=slots_list_kb(slots, page=callback_data.page),
+        await callback.message.edit_text(
+            "\n".join(text_lines),
+            reply_markup=admin_slot_detail_kb(slot)
         )
     except TelegramBadRequest:
         pass
@@ -294,56 +391,122 @@ async def cb_delete_slot(
     session: AsyncSession,
     is_admin: bool,
 ) -> None:
-    """Удаление конкретного слота по ID."""
+    """Удаление конкретного свободного слота."""
     if not _check_admin(is_admin):
-        await callback.answer("⛔ Нет доступа", show_alert=True)
         return
 
-    slot = await session.get(Slot, callback_data.slot_id)
-
+    result = await session.execute(
+        select(Slot)
+        .options(selectinload(Slot.booking))
+        .where(Slot.id == callback_data.slot_id)
+    )
+    slot = result.scalar_one_or_none()
     if not slot:
         await callback.answer("Слот не найден", show_alert=True)
         return
 
     if not slot.is_available:
-        await callback.answer(
-            "❌ Нельзя удалить занятый слот! Сначала отмените бронь.",
-            show_alert=True,
-        )
+        await callback.answer("❌ Слот занят! Сначала отмените бронь.", show_alert=True)
         return
 
-    date_str = slot.date.strftime("%d.%m.%Y")
+    slot_date = slot.date
+    date_str = slot_date.strftime("%d.%m.%Y")
     time_str = slot.time.strftime("%H:%M")
 
     await session.delete(slot)
     await session.commit()
 
     logger.info("Админ %s удалил слот: %s %s", callback.from_user.id, date_str, time_str)
+    await callback.answer(f"🗑 Слот {time_str} удалён")
 
-    # Обновляем список
+    # Возвращаемся к списку слотов на эту дату
     result = await session.execute(
-        select(Slot)
-        .where(Slot.date >= datetime.date.today())
-        .order_by(Slot.date, Slot.time)
+        select(Slot).where(Slot.date == slot_date).order_by(Slot.time)
     )
     slots = list(result.scalars().all())
 
-    if not slots:
-        await callback.message.edit_text(
-            "📋 <b>Слоты</b>\n\n"
-            "Все слоты удалены.\n"
-            "Добавьте новые через меню 📅",
-            reply_markup=admin_main_menu(),
-        )
+    if slots:
+        try:
+            await callback.message.edit_text(
+                f"📅 <b>Слоты на {date_str}</b>\n\n"
+                f"Выберите слот для управления:",
+                reply_markup=admin_slots_on_date_kb(slots),
+            )
+        except TelegramBadRequest:
+            pass
     else:
-        await callback.message.edit_text(
-            "📋 <b>Ваши слоты</b>\n\n"
-            "🟢 — свободен  🔴 — занят\n"
-            "Нажмите 🗑 чтобы удалить:",
-            reply_markup=slots_list_kb(slots, page=0),
-        )
+        # Если слотов на день не осталось, возвращаем к списку дат
+        await _show_dates_page(callback, session, page=0)
 
-    await callback.answer(f"🗑 Слот {date_str} {time_str} удалён")
+
+# ── Отмена брони админом ───────────────────────────────────────────────
+
+@router.callback_query(AdminCancelBookingCB.filter())
+async def cb_admin_cancel_booking(
+    callback: CallbackQuery,
+    callback_data: AdminCancelBookingCB,
+    session: AsyncSession,
+    is_admin: bool,
+) -> None:
+    """Админ отменяет бронь и освобождает слот."""
+    if not _check_admin(is_admin):
+        return
+
+    result = await session.execute(
+        select(Slot)
+        .options(selectinload(Slot.booking).selectinload(Booking.user))
+        .where(Slot.id == callback_data.slot_id)
+    )
+    slot = result.scalar_one_or_none()
+
+    if not slot or slot.is_available:
+        await callback.answer("Слот уже свободен или не найден", show_alert=True)
+        return
+
+    active_booking = slot.booking
+    if not active_booking or active_booking.status not in (BookingStatus.CONFIRMED, BookingStatus.PENDING):
+        await callback.answer("Активная бронь не найдена", show_alert=True)
+        return
+
+    # Отменяем бронь и освобождаем слот
+    active_booking.status = BookingStatus.REJECTED
+    slot.is_available = True
+    await session.commit()
+
+    date_str = slot.date.strftime("%d.%m.%Y")
+    time_str = slot.time.strftime("%H:%M")
+    
+    await callback.answer("✅ Бронь отменена, слот свободен!")
+
+    # Уведомляем клиента
+    client = active_booking.user
+    try:
+        await callback.bot.send_message(
+            chat_id=client.telegram_id,
+            text=(
+                f"😔 <b>К сожалению, ваша запись отменена</b>\n\n"
+                f"📅 Дата: {date_str}\n"
+                f"⏰ Время: {time_str}\n\n"
+                f"Администратор был вынужден отменить запись. Вы можете выбрать другое время — нажмите /start"
+            )
+        )
+    except Exception as e:
+        logger.error("Не удалось уведомить клиента %s об отмене: %s", client.telegram_id, e)
+
+    # Обновляем карточку слота (она теперь должна показывать, что слот свободен)
+    text_lines = [
+        f"💅 <b>Слот:</b> {date_str} в {time_str}",
+        "",
+        "🟢 <b>Статус:</b> Свободен",
+        "<i>Вы можете удалить этот слот, если он больше не нужен.</i>"
+    ]
+    try:
+        await callback.message.edit_text(
+            "\n".join(text_lines),
+            reply_markup=admin_slot_detail_kb(slot)
+        )
+    except TelegramBadRequest:
+        pass
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

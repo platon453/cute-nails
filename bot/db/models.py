@@ -40,8 +40,11 @@ class Slot(Base):
     time: Mapped["Time"] = mapped_column(Time, nullable=False)
     is_available: Mapped[bool] = mapped_column(default=True)
 
-    # Связь: один слот — одна запись (или ни одной)
-    booking: Mapped["Booking | None"] = relationship(back_populates="slot")
+    # Связь: один слот — одна запись (или ни одной). При удалении слота удаляем и бронь (например, отмененную)
+    booking: Mapped["Booking | None"] = relationship(
+        back_populates="slot",
+        cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"<Slot id={self.id} {self.date} {self.time} avail={self.is_available}>"
