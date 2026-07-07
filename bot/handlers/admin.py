@@ -19,10 +19,14 @@ from bot.keyboards.admin import (
     AdminSlotDetailCB,
     AdminCancelBookingCB,
     SlotDeleteCB,
+    AdminActiveBookingsPageCB,
+    AdminArchivePageCB,
     admin_main_menu,
     admin_dates_kb,
     admin_slots_on_date_kb,
     admin_slot_detail_kb,
+    admin_active_bookings_kb,
+    admin_archive_kb,
     cancel_kb,
 )
 from bot.states.admin import AddSlotStates
@@ -564,11 +568,17 @@ async def cb_confirm_booking(
     )
 
     # Обновляем сообщение админа
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    from bot.keyboards.admin import AdminMenuCB
+    
     await callback.message.edit_text(
         f"✅ <b>Запись подтверждена!</b>\n\n"
         f"👤 {booking.user.first_name}\n"
         f"📱 {booking.user.phone}\n"
         f"📅 {date_str} в {time_str}",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="🔙 К активным записям", callback_data=AdminMenuCB(action="active_bookings").pack())
+        ]])
     )
     await callback.answer("✅ Подтверждено!")
 
@@ -633,11 +643,18 @@ async def cb_reject_booking(
     )
 
     # Обновляем сообщение админа
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    from bot.keyboards.admin import AdminMenuCB
+    
     await callback.message.edit_text(
-        f"❌ <b>Запись отклонена</b>\n\n"
+        f"❌ <b>Запись отклонена!</b>\n\n"
         f"👤 {booking.user.first_name}\n"
         f"📱 {booking.user.phone}\n"
-        f"📅 {date_str} в {time_str}",
+        f"📅 {date_str} в {time_str}\n\n"
+        "Слот снова свободен.",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="🔙 К активным записям", callback_data=AdminMenuCB(action="active_bookings").pack())
+        ]])
     )
     await callback.answer("❌ Отклонено")
 
@@ -655,3 +672,154 @@ async def cb_reject_booking(
         )
     except Exception as e:
         logger.error("Не удалось уведомить клиента %s: %s", booking.user.telegram_id, e)
+
+# ── Активные записи ─────────────────────────────────────────────────────
+
+@router.callback_query(AdminMenuCB.filter(F.action == "active_bookings"))
+async def cb_active_bookings_start(
+    callback: CallbackQuery,
+    session: AsyncSession,
+    is_admin: bool,
+) -> None:
+    if not _check_admin(is_admin):
+        return
+    await _render_active_bookings(callback, session, 0)
+
+
+@router.callback_query(AdminActiveBookingsPageCB.filter())
+async def cb_active_bookings_page(
+    callback: CallbackQuery,
+    callback_data: AdminActiveBookingsPageCB,
+    session: AsyncSession,
+    is_admin: bool,
+) -> None:
+    if not _check_admin(is_admin):
+        return
+    await _render_active_bookings(callback, session, callback_data.page)
+
+
+async def _render_active_bookings(callback: CallbackQuery, session: AsyncSession, page: int) -> None:
+    result = await session.execute(
+        select(Booking)
+        .options(selectinload(Booking.user), selectinload(Booking.slot))
+        .where(Booking.status == BookingStatus.PENDING)
+        .order_by(Booking.id.asc())
+    )
+    bookings = list(result.scalars().all())
+    total = len(bookings)
+    
+    if not bookings:
+        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+        await callback.message.edit_text(
+            "🔔 <b>Активные записи</b>\n\nНет заявок, ожидающих подтверждения.",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="🔙 В главное меню", callback_data=AdminMenuCB(action="back").pack())
+            ]])
+        )
+        return
+    
+    page = max(0, min(page, total - 1))
+    booking = bookings[page]
+    date_str = booking.slot.date.strftime("%d.%m.%Y")
+    time_str = booking.slot.time.strftime("%H:%M")
+    
+    user_info = booking.user.first_name
+    if booking.user.username:
+        user_info += f" (@{booking.user.username})"
+    else:
+        user_info += f" (<a href='tg://user?id={booking.user.telegram_id}'>Без юзернейма</a>)"
+        
+    phone = booking.user.phone or "Не указан"
+    
+    text = (
+        f"🔔 <b>Заявка #{booking.id}</b> (Стр. {page + 1} из {total})\n\n"
+        f"📅 Слот: <b>{date_str} {time_str}</b>\n"
+        f"👤 Клиент: {user_info}\n"
+        f"📞 Телефон: <code>{phone}</code>\n"
+    )
+    
+    try:
+        await callback.message.edit_text(
+            text,
+            reply_markup=admin_active_bookings_kb(booking.id, page, total),
+            disable_web_page_preview=True
+        )
+    except TelegramBadRequest:
+        pass
+
+
+# ── Архив записей ───────────────────────────────────────────────────────
+
+@router.callback_query(AdminMenuCB.filter(F.action == "archive"))
+async def cb_archive_start(
+    callback: CallbackQuery,
+    session: AsyncSession,
+    is_admin: bool,
+) -> None:
+    if not _check_admin(is_admin):
+        return
+    await _render_archive(callback, session, 0)
+
+
+@router.callback_query(AdminArchivePageCB.filter())
+async def cb_archive_page(
+    callback: CallbackQuery,
+    callback_data: AdminArchivePageCB,
+    session: AsyncSession,
+    is_admin: bool,
+) -> None:
+    if not _check_admin(is_admin):
+        return
+    await _render_archive(callback, session, callback_data.page)
+
+
+async def _render_archive(callback: CallbackQuery, session: AsyncSession, page: int) -> None:
+    result = await session.execute(
+        select(Booking)
+        .options(selectinload(Booking.user), selectinload(Booking.slot))
+        .where(Booking.status.in_([BookingStatus.CONFIRMED, BookingStatus.REJECTED]))
+        .order_by(Booking.id.desc())
+    )
+    bookings = list(result.scalars().all())
+    
+    per_page = 5
+    total_pages = max(1, (len(bookings) + per_page - 1) // per_page)
+    page = max(0, min(page, total_pages - 1))
+    
+    if not bookings:
+        await callback.message.edit_text(
+            "🗄 <b>Архив заявок</b>\n\nАрхив пуст.",
+            reply_markup=admin_archive_kb(page, total_pages)
+        )
+        return
+        
+    start = page * per_page
+    end = start + per_page
+    page_bookings = bookings[start:end]
+    
+    lines = [f"🗄 <b>Архив заявок (Стр. {page + 1} из {total_pages})</b>\n"]
+    
+    for b in page_bookings:
+        date_str = b.slot.date.strftime("%d.%m.%Y %H:%M")
+        status_icon = "✅ Одобрено" if b.status == BookingStatus.CONFIRMED else "❌ Отклонено"
+        
+        user_name = b.user.first_name
+        if b.user.username:
+             user_name = f"@{b.user.username}"
+        else:
+             user_name = f"<a href='tg://user?id={b.user.telegram_id}'>Без юзернейма</a>"
+             
+        phone = b.user.phone or "Не указан"
+        
+        lines.append(f"#{b.id} | {status_icon} ({date_str})")
+        lines.append(f"👤 {user_name} | {b.user.telegram_id} | 📞 {phone}")
+        lines.append("➖➖➖➖➖➖➖➖➖")
+        
+    try:
+        await callback.message.edit_text(
+            "\n".join(lines),
+            reply_markup=admin_archive_kb(page, total_pages),
+            disable_web_page_preview=True
+        )
+    except TelegramBadRequest:
+        pass

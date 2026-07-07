@@ -18,7 +18,8 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False)
-    first_name: Mapped[str] = mapped_column(String(150), nullable=False)
+    username: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    first_name: Mapped[str] = mapped_column(String(64), nullable=False)
     phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     # Связь: у одного юзера может быть много записей

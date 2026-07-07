@@ -290,11 +290,13 @@ async def _finalize_booking(
     )
     user = result.scalar_one_or_none()
 
+    tg_username = message.from_user.username
     if user:
         user.first_name = name
         user.phone = phone
+        user.username = tg_username
     else:
-        user = User(telegram_id=tg_id, first_name=name, phone=phone)
+        user = User(telegram_id=tg_id, username=tg_username, first_name=name, phone=phone)
         session.add(user)
         await session.flush()  # Получаем user.id
 

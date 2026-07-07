@@ -7,9 +7,11 @@ from bot.db.models import Slot
 
 # ── Callback Data ────────────────────────────────────────────────────────
 
+from bot.keyboards.client import BookingActionCB
+
 class AdminMenuCB(CallbackData, prefix="adm_menu"):
     """Колбэк-данные для главного меню админа."""
-    action: str  # "add_slot" | "view_slots" | "cancel" | "back"
+    action: str  # "add_slot" | "view_slots" | "active_bookings" | "archive" | "cancel" | "back"
 
 
 class AdminDatesPageCB(CallbackData, prefix="adm_dpage"):
@@ -37,6 +39,15 @@ class AdminCancelBookingCB(CallbackData, prefix="adm_cbk"):
     slot_id: int
 
 
+class AdminActiveBookingsPageCB(CallbackData, prefix="adm_actb_page"):
+    """Пагинация для активных записей."""
+    page: int
+
+
+class AdminArchivePageCB(CallbackData, prefix="adm_arch_page"):
+    """Пагинация для архива записей."""
+    page: int
+
 # ── Клавиатуры ───────────────────────────────────────────────────────────
 
 def admin_main_menu() -> InlineKeyboardMarkup:
@@ -47,11 +58,21 @@ def admin_main_menu() -> InlineKeyboardMarkup:
                 text="📅 Добавить слот",
                 callback_data=AdminMenuCB(action="add_slot").pack(),
             ),
-        ],
-        [
             InlineKeyboardButton(
                 text="📋 Мои слоты",
                 callback_data=AdminMenuCB(action="view_slots").pack(),
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text="🔔 Активные записи",
+                callback_data=AdminMenuCB(action="active_bookings").pack(),
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text="🗄 Архив записей",
+                callback_data=AdminMenuCB(action="archive").pack(),
             ),
         ],
     ])
@@ -185,3 +206,76 @@ def cancel_kb() -> InlineKeyboardMarkup:
             ),
         ],
     ])
+
+
+def admin_active_bookings_kb(booking_id: int, page: int, total_pages: int) -> InlineKeyboardMarkup:
+    """Клавиатура для 1 активной записи (подтвердить/отклонить) + пагинация."""
+    rows: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(
+                text="✅ Подтвердить",
+                callback_data=BookingActionCB(booking_id=booking_id, action="confirm").pack()
+            ),
+            InlineKeyboardButton(
+                text="❌ Отклонить",
+                callback_data=BookingActionCB(booking_id=booking_id, action="reject").pack()
+            )
+        ]
+    ]
+
+    nav_buttons: list[InlineKeyboardButton] = []
+    if page > 0:
+        nav_buttons.append(
+            InlineKeyboardButton(
+                text="◀️ Назад",
+                callback_data=AdminActiveBookingsPageCB(page=page - 1).pack()
+            )
+        )
+    if page < total_pages - 1:
+        nav_buttons.append(
+            InlineKeyboardButton(
+                text="Вперёд ▶️",
+                callback_data=AdminActiveBookingsPageCB(page=page + 1).pack()
+            )
+        )
+    if nav_buttons:
+        rows.append(nav_buttons)
+
+    rows.append([
+        InlineKeyboardButton(
+            text="🔙 В главное меню",
+            callback_data=AdminMenuCB(action="back").pack()
+        )
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_archive_kb(page: int, total_pages: int) -> InlineKeyboardMarkup:
+    """Клавиатура для архива (пагинация)."""
+    rows: list[list[InlineKeyboardButton]] = []
+    
+    nav_buttons: list[InlineKeyboardButton] = []
+    if page > 0:
+        nav_buttons.append(
+            InlineKeyboardButton(
+                text="◀️ Назад",
+                callback_data=AdminArchivePageCB(page=page - 1).pack()
+            )
+        )
+    if page < total_pages - 1:
+        nav_buttons.append(
+            InlineKeyboardButton(
+                text="Вперёд ▶️",
+                callback_data=AdminArchivePageCB(page=page + 1).pack()
+            )
+        )
+    if nav_buttons:
+        rows.append(nav_buttons)
+
+    rows.append([
+        InlineKeyboardButton(
+            text="🔙 В главное меню",
+            callback_data=AdminMenuCB(action="back").pack()
+        )
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
