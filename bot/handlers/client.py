@@ -85,10 +85,12 @@ async def cmd_start(
 
     if not slots:
         text = as_list(
-            Text("💅", Bold(" Привет!"), " Добро пожаловать!"),
+            Text("Привет", " 💅"),
             "",
-            "К сожалению, сейчас нет свободных окон для записи.",
-            "Попробуйте зайти позже 🙏"
+            BlockQuote(Italic(
+                "К сожалению, сейчас все окошки заняты.\n",
+                "Загляните чуть позже, я обязательно добавлю новые места! 💖"
+            ))
         )
         await message.answer(**text.as_kwargs())
         return
@@ -154,10 +156,15 @@ async def cb_back_to_dates(
     slots = list(result.scalars().all())
 
     if not slots:
-        await callback.message.edit_text(
-            "😔 К сожалению, свободных окон больше нет.\n"
-            "Попробуйте зайти позже 🙏",
+        text = as_list(
+            Text("Привет", " 💅"),
+            "",
+            BlockQuote(Italic(
+                "К сожалению, сейчас все окошки заняты.\n",
+                "Загляните чуть позже, я обязательно добавлю новые места! 💖"
+            ))
         )
+        await callback.message.edit_text(**text.as_kwargs())
         await state.clear()
         await callback.answer()
         return
