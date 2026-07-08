@@ -22,7 +22,7 @@ services:
     ports:
       - "127.0.0.1:2017:2017" # Панель закрыта от интернета, доступ только через SSH-туннель локально
     volumes:
-      - ./v2raya_data:/etc/v2raya
+      - v2raya_data:/etc/v2raya
 
   bot:
     build: .
@@ -38,3 +38,4 @@ services:
 
 volumes:
   pg_data:
+  v2raya_data:
