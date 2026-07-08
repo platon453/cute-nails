@@ -26,8 +26,8 @@ async def main() -> None:
         ],
     )
 
-    # Прокси через v2rayA (HTTP-прокси на порту 20171 в Docker-сети)
-    session = AiohttpSession(proxy="http://v2raya:20171")
+    # Прокси через v2rayA (SOCKS5-прокси на порту 20170 в Docker-сети)
+    session = AiohttpSession(proxy="socks5://v2raya:20170")
 
     bot = Bot(
         token=settings.bot_token,
